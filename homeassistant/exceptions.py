@@ -64,6 +64,15 @@ class HomeAssistantError(Exception):
             return self._message
 
         if not self.generate_message:
+            # Initialize self._message to the string repr of the class
+            # to prevent a recursive loop.
+            self._message = (
+                f"Parent class {self.__class__.__name__} is missing __str__ method"
+            )
+            # If the there is an other super class involved,
+            # we want to call its __str__ method.
+            # If the super().__str__ method is missing in the base_class
+            # the call will be recursive and we return our initialized default.
             self._message = super().__str__()
             return self._message
 
@@ -261,7 +270,6 @@ class ServiceNotFound(HomeAssistantError):
         """Initialize error."""
         super().__init__(
             self,
-            f"Service {domain}.{service} not found.",
             translation_domain="homeassistant",
             translation_key="service_not_found",
             translation_placeholders={"domain": domain, "service": service},
@@ -281,14 +289,18 @@ class MaxLengthExceeded(HomeAssistantError):
         """Initialize error."""
         super().__init__(
             self,
-            (
-                f"Value {value} for property {property_name} has a max length of "
-                f"{max_length} characters"
-            ),
+            translation_domain="homeassistant",
+            translation_key="max_length_exceeded",
+            translation_placeholders={
+                "value": value,
+                "property_name": property_name,
+                "max_length": str(max_length),
+            },
         )
         self.value = value
         self.property_name = property_name
         self.max_length = max_length
+        self.generate_message = True
 
 
 class DependencyError(HomeAssistantError):
