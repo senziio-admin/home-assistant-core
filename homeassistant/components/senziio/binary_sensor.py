@@ -1,8 +1,6 @@
 """Senziio binary sensor entities."""
 from __future__ import annotations
 
-import logging
-
 from homeassistant.components.binary_sensor import (
     BinarySensorDeviceClass,
     BinarySensorEntity,
@@ -16,8 +14,6 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.util.json import json_loads_object
 
 from .const import DOMAIN
-
-_LOGGER = logging.getLogger(__name__)
 
 BINARY_SENSOR_DESCRIPTIONS: tuple[BinarySensorEntityDescription, ...] = (
     BinarySensorEntityDescription(
@@ -71,7 +67,7 @@ class SenziioBinarySensorEntity(BinarySensorEntity):
         self._dt_topic = f"dt/theia-pro/{unique_id}/{entity_description.key}"
 
     async def async_added_to_hass(self) -> None:
-        """Subscribe to MQTT event."""
+        """Subscribe to MQTT data event."""
 
         @callback
         def message_received(message):

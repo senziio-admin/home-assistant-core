@@ -30,7 +30,6 @@ from .const import DOMAIN
 class SenziioSensorEntityDescription(SensorEntityDescription):
     """Class describing Senziio sensor entities."""
 
-    # topic_key: str
     value_key: str
 
 
@@ -124,7 +123,7 @@ class SenziioSensorEntity(SensorEntity):
         self._dt_topic = f"dt/theia-pro/{unique_id}/{entity_description.key}"
 
     async def async_added_to_hass(self) -> None:
-        """Subscribe to MQTT event."""
+        """Subscribe to MQTT data event."""
 
         @callback
         def message_received(message):

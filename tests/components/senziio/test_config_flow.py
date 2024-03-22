@@ -1,4 +1,4 @@
-"""Test the Senziio Sensor config flow."""
+"""Test the Senziio config flow."""
 from unittest.mock import AsyncMock, patch
 
 from homeassistant import config_entries

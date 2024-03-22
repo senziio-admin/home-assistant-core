@@ -2,7 +2,7 @@
   "config": {
     "step": {
       "user": {
-        "title": "New Senziio Sensor",
+        "title": "New Senziio Device",
         "data": {
           "unique_id": "Unique ID (Serial Number)",
           "model": "Device Model",
@@ -10,7 +10,7 @@
         }
       },
       "zeroconf_confirm": {
-        "title": "New Senziio sensor discovered",
+        "title": "New Senziio device discovered",
         "description": "Do you want to add this device to Home Assistant?\n\n* Model: **{device_model}**\n* Serial Number: **{device_id}**\n",
         "data": {
           "friendly_name": "Friendly Name"
@@ -23,7 +23,8 @@
       "unknown": "[%key:common::config_flow::error::unknown%]"
     },
     "abort": {
-      "already_configured": "[%key:common::config_flow::abort::already_configured_device%]"
+      "already_configured": "[%key:common::config_flow::abort::already_configured_device%]",
+      "invalid_device_data": "Invalid device serial number or model"
     }
   }
 }

@@ -1,4 +1,4 @@
-"""Constants for the Senziio Sensor integration."""
+"""Constants for the Senziio integration."""
 
 DOMAIN = "senziio"
 MANUFACTURER = "Senziio"

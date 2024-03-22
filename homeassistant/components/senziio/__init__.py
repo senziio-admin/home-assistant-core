@@ -1,4 +1,4 @@
-"""Senziio Sensor integration."""
+"""Senziio integration."""
 from __future__ import annotations
 
 import logging
@@ -19,7 +19,7 @@ PLATFORMS: list[Platform] = [Platform.BINARY_SENSOR, Platform.SENSOR]
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Set up Senziio Sensor from a config entry."""
+    """Set up Senziio device from a config entry."""
 
     # Make sure MQTT integration is enabled and the client is available.
     if not await mqtt.async_wait_for_mqtt_client(hass):

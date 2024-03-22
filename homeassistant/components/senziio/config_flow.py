@@ -1,4 +1,4 @@
-"""Config flow for Senziio Sensor integration."""
+"""Config flows for Senziio integration."""
 from __future__ import annotations
 
 import logging
