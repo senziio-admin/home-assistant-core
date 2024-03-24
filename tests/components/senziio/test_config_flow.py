@@ -2,7 +2,7 @@
 from unittest.mock import AsyncMock, patch
 
 from homeassistant import config_entries
-from homeassistant.components.senziio.config_flow import CannotConnect, InvalidAuth
+from homeassistant.components.senziio.config_flow import CannotConnect
 from homeassistant.components.senziio.const import DOMAIN
 from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_USERNAME
 from homeassistant.core import HomeAssistant
@@ -51,7 +51,7 @@ async def test_form_invalid_auth(
 
     with patch(
         "homeassistant.components.senziio.config_flow.PlaceholderHub.authenticate",
-        side_effect=InvalidAuth,
+        side_effect=CannotConnect,
     ):
         result = await hass.config_entries.flow.async_configure(
             result["flow_id"],

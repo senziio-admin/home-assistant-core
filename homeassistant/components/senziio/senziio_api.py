@@ -7,6 +7,9 @@ from typing import Optional
 
 from homeassistant.components.mqtt import async_publish, async_subscribe
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import HomeAssistantError
+
+from .exceptions import MQTTNotEnabled
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -53,19 +56,23 @@ class Senziio:
                 )
             response.set()
 
-        unsubscribe_callback = await async_subscribe(
-            self.hass,
-            self.topics["info_res"],
-            handle_response,
-        )
+        try:
+            unsubscribe_callback = await async_subscribe(
+                self.hass,
+                self.topics["info_res"],
+                handle_response,
+            )
 
-        await async_publish(
-            self.hass,
-            self.topics["info_req"],
-            "Device info request",
-            qos=1,
-            retain=False,
-        )
+            await async_publish(
+                self.hass,
+                self.topics["info_req"],
+                "Device info request",
+                qos=1,
+                retain=False,
+            )
+        except HomeAssistantError as error:
+            _LOGGER.error("Could not set MQTT topics")
+            raise MQTTNotEnabled from error
 
         try:
             await asyncio.wait_for(response.wait(), self.TIMEOUT)

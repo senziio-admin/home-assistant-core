@@ -10,34 +10,12 @@ from homeassistant import config_entries
 from homeassistant.components import zeroconf
 from homeassistant.const import CONF_FRIENDLY_NAME, CONF_MODEL, CONF_UNIQUE_ID
 from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import HomeAssistantError
 
-from .const import DOMAIN
+from .const import DOMAIN, MANUFACTURER
+from .exceptions import CannotConnect, MQTTNotEnabled, RepeatedTitle
 from .senziio_api import Senziio
 
 _LOGGER = logging.getLogger(__name__)
-
-
-async def validate_input(
-    hass: HomeAssistant, data_input: dict[str, Any]
-) -> dict[str, Any]:
-    """Validate the user input allows us to connect."""
-    # check friendly name is unique
-    friendly_name = data_input[CONF_FRIENDLY_NAME]
-    existing_titles = {
-        entry.title for entry in hass.config_entries.async_entries(DOMAIN)
-    }
-    if friendly_name in existing_titles:
-        raise RepeatedTitle
-
-    # validate device response
-    device_id = data_input[CONF_UNIQUE_ID]
-    device_model = data_input[CONF_MODEL]
-    device_info = await Senziio(hass, device_id, device_model).get_info()
-    if not device_info:
-        raise CannotConnect
-
-    return {**data_input, **device_info}
 
 
 class SenziioConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
@@ -65,6 +43,8 @@ class SenziioConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
             try:
                 data = await validate_input(self.hass, user_input)
+            except MQTTNotEnabled:
+                errors["base"] = "mqtt_not_enabled"
             except CannotConnect:
                 errors["base"] = "cannot_connect"
             except RepeatedTitle:
@@ -80,9 +60,13 @@ class SenziioConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         step_user_data_schema = vol.Schema(
             {
-                vol.Required(CONF_UNIQUE_ID, default=device_id): str,
-                vol.Required(CONF_MODEL, default=device_model): str,
-                vol.Required(CONF_FRIENDLY_NAME, default=friendly_name): str,
+                vol.Required(CONF_UNIQUE_ID, default=device_id): vol.All(
+                    str, vol.Strip
+                ),
+                vol.Required(CONF_MODEL, default=device_model): vol.All(str, vol.Strip),
+                vol.Required(CONF_FRIENDLY_NAME, default=friendly_name): vol.All(
+                    str, vol.Strip
+                ),
             }
         )
 
@@ -95,8 +79,15 @@ class SenziioConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     ) -> config_entries.ConfigFlowResult:
         """Handle Senziio device discovered via Zeroconf."""
         _LOGGER.info("Discovered Senziio device via Zeroconf")
-        self.context[CONF_UNIQUE_ID] = discovery_info.properties["device_id"]
+
+        device_id = discovery_info.properties["device_id"]
+
+        await self.async_set_unique_id(device_id)
+        self._abort_if_unique_id_configured()
+
+        self.context[CONF_UNIQUE_ID] = device_id
         self.context[CONF_MODEL] = discovery_info.properties["device_model"]
+
         return await self.async_step_zeroconf_confirm()
 
     async def async_step_zeroconf_confirm(
@@ -114,11 +105,10 @@ class SenziioConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 CONF_FRIENDLY_NAME: friendly_name,
             }
 
-            await self.async_set_unique_id(device_id)
-            self._abort_if_unique_id_configured()
-
             try:
                 data = await validate_input(self.hass, data_input)
+            except MQTTNotEnabled:
+                errors["base"] = "mqtt_not_enabled"
             except CannotConnect:
                 errors["base"] = "cannot_connect"
             except RepeatedTitle:
@@ -137,7 +127,7 @@ class SenziioConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 vol.Required(
                     CONF_FRIENDLY_NAME,
                     default=self._get_friendly_name(),
-                ): str,
+                ): vol.All(str, vol.Strip),
             }
         )
 
@@ -156,16 +146,32 @@ class SenziioConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         used_titles = {
             entry.title for entry in self._async_current_entries(include_ignore=True)
         }
-        model = self.context.get(CONF_MODEL) or ""
+        prefix = MANUFACTURER
+        if model := self.context.get(CONF_MODEL):
+            prefix = f"{MANUFACTURER} {model}"
         number = len(used_titles) + 1
-        while (title := f"Senziio {model} {number}") in used_titles:
+        while (title := f"{prefix} {number}") in used_titles:
             number += 1
         return title
 
 
-class CannotConnect(HomeAssistantError):
-    """Error to indicate we cannot connect to the device."""
+async def validate_input(
+    hass: HomeAssistant, data_input: dict[str, Any]
+) -> dict[str, Any]:
+    """Validate input data."""
+    # check friendly name is unique
+    friendly_name = data_input[CONF_FRIENDLY_NAME]
+    existing_titles = {
+        entry.title for entry in hass.config_entries.async_entries(DOMAIN)
+    }
+    if friendly_name in existing_titles:
+        raise RepeatedTitle
 
+    # validate device response
+    device_id = data_input[CONF_UNIQUE_ID]
+    device_model = data_input[CONF_MODEL]
+    device_info = await Senziio(hass, device_id, device_model).get_info()
+    if not device_info:
+        raise CannotConnect
 
-class RepeatedTitle(HomeAssistantError):
-    """Error to indicate that chosen device name is not unique."""
+    return {**data_input, **device_info}
