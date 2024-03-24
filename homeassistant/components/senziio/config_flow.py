@@ -17,6 +17,8 @@ from .senziio_api import Senziio
 
 _LOGGER = logging.getLogger(__name__)
 
+_input_type = vol.All(str, vol.Strip)
+
 
 class SenziioConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Handle a config flows for Senziio Sensor."""
@@ -60,13 +62,9 @@ class SenziioConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         step_user_data_schema = vol.Schema(
             {
-                vol.Required(CONF_UNIQUE_ID, default=device_id): vol.All(
-                    str, vol.Strip
-                ),
-                vol.Required(CONF_MODEL, default=device_model): vol.All(str, vol.Strip),
-                vol.Required(CONF_FRIENDLY_NAME, default=friendly_name): vol.All(
-                    str, vol.Strip
-                ),
+                vol.Required(CONF_UNIQUE_ID, default=device_id): _input_type,
+                vol.Required(CONF_MODEL, default=device_model): _input_type,
+                vol.Required(CONF_FRIENDLY_NAME, default=friendly_name): _input_type,
             }
         )
 
@@ -160,7 +158,7 @@ async def validate_input(
 ) -> dict[str, Any]:
     """Validate input data."""
     # check friendly name is unique
-    friendly_name = data_input[CONF_FRIENDLY_NAME]
+    friendly_name = _sanitize(data_input[CONF_FRIENDLY_NAME])
     existing_titles = {
         entry.title for entry in hass.config_entries.async_entries(DOMAIN)
     }
@@ -168,10 +166,20 @@ async def validate_input(
         raise RepeatedTitle
 
     # validate device response
-    device_id = data_input[CONF_UNIQUE_ID]
-    device_model = data_input[CONF_MODEL]
+    device_id = _sanitize(data_input[CONF_UNIQUE_ID])
+    device_model = _sanitize(data_input[CONF_MODEL])
     device_info = await Senziio(hass, device_id, device_model).get_info()
     if not device_info:
         raise CannotConnect
 
-    return {**data_input, **device_info}
+    return {
+        CONF_UNIQUE_ID: device_id,
+        CONF_MODEL: device_model,
+        CONF_FRIENDLY_NAME: friendly_name,
+        **device_info,
+    }
+
+
+def _sanitize(value: str) -> str:
+    """Sanitize entry value."""
+    return " ".join(value.split())
