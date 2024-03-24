@@ -13,7 +13,7 @@ from homeassistant.core import HomeAssistant
 
 from .const import DOMAIN, MANUFACTURER
 from .exceptions import CannotConnect, MQTTNotEnabled, RepeatedTitle
-from .senziio_api import Senziio
+from .senziio_api import Senziio, SenziioHAMQTT
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -168,7 +168,9 @@ async def validate_input(
     # validate device response
     device_id = _sanitize(data_input[CONF_UNIQUE_ID])
     device_model = _sanitize(data_input[CONF_MODEL])
-    device_info = await Senziio(hass, device_id, device_model).get_info()
+    device = Senziio(device_id, device_model, mqtt=SenziioHAMQTT(hass))
+    device_info = await device.get_info()
+
     if not device_info:
         raise CannotConnect
 

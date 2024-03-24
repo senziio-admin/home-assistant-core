@@ -37,12 +37,13 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up Senziio entities."""
+    device = hass.data[DOMAIN][entry.entry_id]
     device_info = DeviceInfo(
         identifiers={(DOMAIN, entry.data["unique_id"])},
     )
     async_add_entities(
         [
-            SenziioBinarySensorEntity(hass, entity_description, device_info, entry)
+            SenziioBinarySensorEntity(hass, entity_description, device_info, device)
             for entity_description in BINARY_SENSOR_DESCRIPTIONS
         ]
     )
@@ -56,15 +57,14 @@ class SenziioBinarySensorEntity(BinarySensorEntity):
         hass: HomeAssistant,
         entity_description: BinarySensorEntityDescription,
         device_info: DeviceInfo,
-        entry: ConfigEntry,
+        device,
     ) -> None:
         """Initialize entity."""
-        unique_id = entry.data["unique_id"]
         self.entity_description = entity_description
-        self._attr_unique_id = f"{unique_id}_{entity_description.key}"
+        self._attr_unique_id = f"{device.id}_{entity_description.key}"
         self._attr_device_info = device_info
         self._hass = hass
-        self._dt_topic = f"dt/theia-pro/{unique_id}/{entity_description.key}"
+        self._dt_topic = device.entity_topic(entity_description.key)
 
     async def async_added_to_hass(self) -> None:
         """Subscribe to MQTT data event."""
