@@ -38,7 +38,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         hw_version=entry.data["hw-version"],
         sw_version=entry.data["fw-version"],
         serial_number=entry.data["serial-number"],
-        # connections={(dr.CONNECTION_NETWORK_MAC, "TO:BE:DEFINED")},
+        connections={(dr.CONNECTION_NETWORK_MAC, entry.data["mac-address"])},
     )
     device_registry = dr.async_get(hass)
     device_registry.async_get_or_create(

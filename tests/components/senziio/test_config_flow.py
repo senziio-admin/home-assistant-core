@@ -1,144 +1,397 @@
 """Test the Senziio config flow."""
-from unittest.mock import AsyncMock, patch
+
+from ipaddress import ip_address
+from unittest.mock import patch
+
+import pytest
 
 from homeassistant import config_entries
+from homeassistant.components import zeroconf
 from homeassistant.components.senziio.config_flow import CannotConnect
-from homeassistant.components.senziio.const import DOMAIN
-from homeassistant.const import CONF_HOST, CONF_PASSWORD, CONF_USERNAME
+from homeassistant.components.senziio.const import DOMAIN, MANUFACTURER
+from homeassistant.components.senziio.exceptions import MQTTNotEnabled, RepeatedTitle
+from homeassistant.const import CONF_FRIENDLY_NAME, CONF_MODEL, CONF_UNIQUE_ID
 from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
 
+from .fakes import FakeSenziio
 
-async def test_form(hass: HomeAssistant, mock_setup_entry: AsyncMock) -> None:
-    """Test we get the form."""
-    result = await hass.config_entries.flow.async_init(
-        DOMAIN, context={"source": config_entries.SOURCE_USER}
-    )
-    assert result["type"] == FlowResultType.FORM
-    assert result["errors"] == {}
+from tests.common import MockConfigEntry
 
+A_DEVICE_ID = "theia-pro-2F3D56AA1234"
+A_DEVICE_MODEL = "Theia Pro"
+A_FRIENDLY_NAME = "A Friendly Name"
+ANOTHER_DEVICE_ID = "theia-pro-AD2BF63DF999"
+
+DEVICE_INFO = {
+    "model": "Theia Pro",
+    "fw-version": "1.2.3",
+    "hw-version": "1.0.0",
+    "mac-address": "1A:2B:3C:4D:5E:6F",
+    "serial-number": "theia-pro-2F3D56AA1234",
+}
+
+ZEROCONF_DISCOVERY_INFO = zeroconf.ZeroconfServiceInfo(
+    ip_address=ip_address("1.1.1.1"),
+    ip_addresses=[ip_address("1.1.1.1")],
+    hostname=f"senziio-{A_DEVICE_ID}.local.",
+    name=f"senziio-{A_DEVICE_ID}._http._tcp.local.",
+    port=0,
+    properties={
+        "device_id": A_DEVICE_ID,
+        "device_model": A_DEVICE_MODEL,
+    },
+    type="_http._tcp.local.",
+)
+
+
+async def test_user_flow_success(hass: HomeAssistant):
+    """Test a successful configuration via user initiated config flow."""
     with patch(
-        "homeassistant.components.senziio.config_flow.PlaceholderHub.authenticate",
+        "homeassistant.components.senziio.config_flow.Senziio",
+        return_value=FakeSenziio(DEVICE_INFO),
+    ), patch(
+        "homeassistant.components.senziio.async_setup_entry",
         return_value=True,
     ):
-        result = await hass.config_entries.flow.async_configure(
+        # open user flow
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN, context={"source": config_entries.SOURCE_USER}
+        )
+
+        # check initialized form
+        assert result["type"] == FlowResultType.FORM
+        assert result["step_id"] == "user"
+
+        # enter form data
+        result2 = await hass.config_entries.flow.async_configure(
             result["flow_id"],
             {
-                CONF_HOST: "1.1.1.1",
-                CONF_USERNAME: "test-username",
-                CONF_PASSWORD: "test-password",
+                CONF_UNIQUE_ID: A_DEVICE_ID,
+                CONF_MODEL: A_DEVICE_MODEL,
+                CONF_FRIENDLY_NAME: A_FRIENDLY_NAME,
             },
         )
-        await hass.async_block_till_done()
 
-    assert result["type"] == FlowResultType.CREATE_ENTRY
-    assert result["title"] == "Name of the device"
-    assert result["data"] == {
-        CONF_HOST: "1.1.1.1",
-        CONF_USERNAME: "test-username",
-        CONF_PASSWORD: "test-password",
+    # check expected data for entry creation
+    expected_entry_data = {
+        CONF_UNIQUE_ID: A_DEVICE_ID,
+        CONF_MODEL: A_DEVICE_MODEL,
+        CONF_FRIENDLY_NAME: A_FRIENDLY_NAME,
+        "fw-version": "1.2.3",
+        "hw-version": "1.0.0",
+        "mac-address": "1A:2B:3C:4D:5E:6F",
+        "serial-number": "theia-pro-2F3D56AA1234",
     }
-    assert len(mock_setup_entry.mock_calls) == 1
+    assert result2["type"] == FlowResultType.CREATE_ENTRY
+    assert result2["title"] == A_FRIENDLY_NAME
+    assert result2["data"] == expected_entry_data
 
 
-async def test_form_invalid_auth(
-    hass: HomeAssistant, mock_setup_entry: AsyncMock
-) -> None:
-    """Test we handle invalid auth."""
-    result = await hass.config_entries.flow.async_init(
-        DOMAIN, context={"source": config_entries.SOURCE_USER}
-    )
-
+@pytest.mark.parametrize(
+    ("error", "expected_error_key"),
+    [
+        (MQTTNotEnabled, "mqtt_not_enabled"),
+        (CannotConnect, "cannot_connect"),
+        (RepeatedTitle, "repeated_title"),
+        (KeyError, "unknown"),
+        (RuntimeError, "unknown"),
+        (Exception, "unknown"),
+    ],
+)
+async def test_user_flow_form_error_handling(
+    hass: HomeAssistant, error: Exception, expected_error_key: str
+):
+    """Test handling data errors in user config flow."""
     with patch(
-        "homeassistant.components.senziio.config_flow.PlaceholderHub.authenticate",
-        side_effect=CannotConnect,
+        "homeassistant.components.senziio.config_flow.validate_input",
+        side_effect=error,
     ):
-        result = await hass.config_entries.flow.async_configure(
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN, context={"source": config_entries.SOURCE_USER}
+        )
+        result2 = await hass.config_entries.flow.async_configure(
             result["flow_id"],
             {
-                CONF_HOST: "1.1.1.1",
-                CONF_USERNAME: "test-username",
-                CONF_PASSWORD: "test-password",
+                CONF_UNIQUE_ID: A_DEVICE_ID,
+                CONF_MODEL: A_DEVICE_MODEL,
+                CONF_FRIENDLY_NAME: A_FRIENDLY_NAME,
+            },
+        )
+    assert result2["type"] == FlowResultType.FORM
+    assert result2["errors"] == {"base": expected_error_key}
+
+
+async def test_user_flow_cannot_connect(hass: HomeAssistant):
+    """Test raising connection error when no device data is retrieved."""
+    with patch(
+        "homeassistant.components.senziio.config_flow.Senziio",
+        return_value=FakeSenziio({}),
+    ):
+        # open user flow
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN, context={"source": config_entries.SOURCE_USER}
+        )
+
+        # check initialized form
+        assert result["type"] == FlowResultType.FORM
+        assert result["step_id"] == "user"
+
+        # enter form data
+        result2 = await hass.config_entries.flow.async_configure(
+            result["flow_id"],
+            {
+                CONF_UNIQUE_ID: A_DEVICE_ID,
+                CONF_MODEL: A_DEVICE_MODEL,
+                CONF_FRIENDLY_NAME: A_FRIENDLY_NAME,
             },
         )
 
-    assert result["type"] == FlowResultType.FORM
-    assert result["errors"] == {"base": "invalid_auth"}
+    assert result2["type"] == FlowResultType.FORM
+    assert result2["errors"] == {"base": "cannot_connect"}
 
-    # Make sure the config flow tests finish with either an
-    # FlowResultType.CREATE_ENTRY or FlowResultType.ABORT so
-    # we can show the config flow is able to recover from an error.
+
+async def test_user_flow_aborted_if_device_id_already_configured(hass: HomeAssistant):
+    """Test that the same friendly name can not be added twice via config flow."""
     with patch(
-        "homeassistant.components.senziio.config_flow.PlaceholderHub.authenticate",
+        "homeassistant.components.senziio.config_flow.Senziio",
+        return_value=FakeSenziio(DEVICE_INFO),
+    ):
+        entry = MockConfigEntry(
+            domain=DOMAIN,
+            unique_id=A_DEVICE_ID,
+            title=A_FRIENDLY_NAME,
+        )
+        entry.add_to_hass(hass)
+
+        # open user flow
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN, context={"source": config_entries.SOURCE_USER}
+        )
+
+        # enter form data with already used friendly name
+        result2 = await hass.config_entries.flow.async_configure(
+            result["flow_id"],
+            {
+                CONF_UNIQUE_ID: A_DEVICE_ID,
+                CONF_MODEL: A_DEVICE_MODEL,
+                CONF_FRIENDLY_NAME: A_FRIENDLY_NAME,
+            },
+        )
+
+        assert result2["type"] == FlowResultType.ABORT
+
+
+async def test_user_flow_repeated_friendly_name(hass: HomeAssistant):
+    """Test that the same friendly name can not be added twice via config flow."""
+    with patch(
+        "homeassistant.components.senziio.config_flow.Senziio",
+        return_value=FakeSenziio(DEVICE_INFO),
+    ):
+        entry = MockConfigEntry(
+            domain=DOMAIN,
+            unique_id=A_DEVICE_ID,
+            title=A_FRIENDLY_NAME,
+        )
+        entry.add_to_hass(hass)
+
+        # open user flow
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN, context={"source": config_entries.SOURCE_USER}
+        )
+
+        # enter form data for different device with already used friendly name
+        result2 = await hass.config_entries.flow.async_configure(
+            result["flow_id"],
+            {
+                CONF_UNIQUE_ID: ANOTHER_DEVICE_ID,
+                CONF_MODEL: A_DEVICE_MODEL,
+                CONF_FRIENDLY_NAME: A_FRIENDLY_NAME,
+            },
+        )
+
+        assert result2["type"] == FlowResultType.FORM
+        assert result2["errors"] == {"base": "repeated_title"}
+
+
+async def test_user_flow_friendly_name_generation(hass: HomeAssistant):
+    """Test that the same friendly name can not be added twice via config flow."""
+    with patch(
+        "homeassistant.components.senziio.config_flow.Senziio",
+        return_value=FakeSenziio(DEVICE_INFO),
+    ):
+        entry = MockConfigEntry(
+            domain=DOMAIN,
+            unique_id=A_DEVICE_ID,
+            title=f"{MANUFACTURER} 2",
+        )
+        entry.add_to_hass(hass)
+
+        # open user flow
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN, context={"source": config_entries.SOURCE_USER}
+        )
+
+        proposed_friendly_name = next(
+            field.default()
+            for field in result["data_schema"].schema
+            if field == "friendly_name"
+        )
+
+    assert proposed_friendly_name == f"{MANUFACTURER} 3"
+
+
+async def test_zeroconf_flow_success(hass: HomeAssistant):
+    """Test a successful configuration via zeroconf discovery."""
+    with patch(
+        "homeassistant.components.senziio.config_flow.Senziio",
+        return_value=FakeSenziio(DEVICE_INFO),
+    ), patch(
+        "homeassistant.components.senziio.async_setup_entry",
         return_value=True,
     ):
-        result = await hass.config_entries.flow.async_configure(
+        # open zeroconf flow form
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN,
+            context={"source": config_entries.SOURCE_ZEROCONF},
+            data=ZEROCONF_DISCOVERY_INFO,
+        )
+
+        # check initialized form
+        assert result["type"] == FlowResultType.FORM
+        assert result["step_id"] == "zeroconf_confirm"
+
+        # enter form data
+        result2 = await hass.config_entries.flow.async_configure(
             result["flow_id"],
             {
-                CONF_HOST: "1.1.1.1",
-                CONF_USERNAME: "test-username",
-                CONF_PASSWORD: "test-password",
+                CONF_FRIENDLY_NAME: A_FRIENDLY_NAME,
             },
         )
-        await hass.async_block_till_done()
 
-    assert result["type"] == FlowResultType.CREATE_ENTRY
-    assert result["title"] == "Name of the device"
-    assert result["data"] == {
-        CONF_HOST: "1.1.1.1",
-        CONF_USERNAME: "test-username",
-        CONF_PASSWORD: "test-password",
+    # check expected data for entry creation
+    expected_entry_data = {
+        CONF_UNIQUE_ID: A_DEVICE_ID,
+        CONF_MODEL: A_DEVICE_MODEL,
+        CONF_FRIENDLY_NAME: A_FRIENDLY_NAME,
+        "fw-version": "1.2.3",
+        "hw-version": "1.0.0",
+        "mac-address": "1A:2B:3C:4D:5E:6F",
+        "serial-number": "theia-pro-2F3D56AA1234",
     }
-    assert len(mock_setup_entry.mock_calls) == 1
+    assert result2["type"] == FlowResultType.CREATE_ENTRY
+    assert result2["title"] == A_FRIENDLY_NAME
+    assert result2["data"] == expected_entry_data
 
 
-async def test_form_cannot_connect(
-    hass: HomeAssistant, mock_setup_entry: AsyncMock
-) -> None:
-    """Test we handle cannot connect error."""
-    result = await hass.config_entries.flow.async_init(
-        DOMAIN, context={"source": config_entries.SOURCE_USER}
-    )
-
+@pytest.mark.parametrize(
+    ("error", "expected_error_key"),
+    [
+        (MQTTNotEnabled, "mqtt_not_enabled"),
+        (CannotConnect, "cannot_connect"),
+        (RepeatedTitle, "repeated_title"),
+        (KeyError, "unknown"),
+        (RuntimeError, "unknown"),
+        (Exception, "unknown"),
+    ],
+)
+async def test_zeroconf_flow_form_error_handling(
+    hass: HomeAssistant, error: Exception, expected_error_key: str
+):
+    """Test handling data errors in zeroconf config flow."""
     with patch(
-        "homeassistant.components.senziio.config_flow.PlaceholderHub.authenticate",
-        side_effect=CannotConnect,
+        "homeassistant.components.senziio.config_flow.validate_input",
+        side_effect=error,
     ):
-        result = await hass.config_entries.flow.async_configure(
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN,
+            context={"source": config_entries.SOURCE_ZEROCONF},
+            data=ZEROCONF_DISCOVERY_INFO,
+        )
+        result2 = await hass.config_entries.flow.async_configure(
             result["flow_id"],
             {
-                CONF_HOST: "1.1.1.1",
-                CONF_USERNAME: "test-username",
-                CONF_PASSWORD: "test-password",
+                CONF_FRIENDLY_NAME: A_FRIENDLY_NAME,
+            },
+        )
+    assert result2["type"] == FlowResultType.FORM
+    assert result2["errors"] == {"base": expected_error_key}
+
+
+async def test_zeroconf_flow_aborted_if_device_id_already_configured(
+    hass: HomeAssistant,
+):
+    """Test that the same friendly name can not be added twice via config flow."""
+    with patch(
+        "homeassistant.components.senziio.config_flow.Senziio",
+        return_value=FakeSenziio(DEVICE_INFO),
+    ):
+        entry = MockConfigEntry(
+            domain=DOMAIN,
+            unique_id=A_DEVICE_ID,
+            title=A_FRIENDLY_NAME,
+        )
+        entry.add_to_hass(hass)
+
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN,
+            context={"source": config_entries.SOURCE_ZEROCONF},
+            data=ZEROCONF_DISCOVERY_INFO,
+        )
+
+        # zerconf flow is not initiated
+        assert result["type"] == FlowResultType.ABORT
+
+
+async def test_zeroconf_flow_cannot_connect(hass: HomeAssistant):
+    """Test raising connection error when no device data is retrieved."""
+    with patch(
+        "homeassistant.components.senziio.config_flow.Senziio",
+        return_value=FakeSenziio({}),
+    ):
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN,
+            context={"source": config_entries.SOURCE_ZEROCONF},
+            data=ZEROCONF_DISCOVERY_INFO,
+        )
+
+        result2 = await hass.config_entries.flow.async_configure(
+            result["flow_id"],
+            {
+                CONF_FRIENDLY_NAME: A_FRIENDLY_NAME,
             },
         )
 
-    assert result["type"] == FlowResultType.FORM
-    assert result["errors"] == {"base": "cannot_connect"}
+    assert result2["type"] == FlowResultType.FORM
+    assert result2["errors"] == {"base": "cannot_connect"}
 
-    # Make sure the config flow tests finish with either an
-    # FlowResultType.CREATE_ENTRY or FlowResultType.ABORT so
-    # we can show the config flow is able to recover from an error.
 
+async def test_zeroconf_flow_repeated_friendly_name(hass: HomeAssistant):
+    """Test that the same friendly name can not be added twice via config flow."""
     with patch(
-        "homeassistant.components.senziio.config_flow.PlaceholderHub.authenticate",
-        return_value=True,
+        "homeassistant.components.senziio.config_flow.Senziio",
+        return_value=FakeSenziio(DEVICE_INFO),
     ):
-        result = await hass.config_entries.flow.async_configure(
+        entry = MockConfigEntry(
+            domain=DOMAIN,
+            unique_id=ANOTHER_DEVICE_ID,
+            title=A_FRIENDLY_NAME,
+        )
+        entry.add_to_hass(hass)
+
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN,
+            context={"source": config_entries.SOURCE_ZEROCONF},
+            data=ZEROCONF_DISCOVERY_INFO,
+        )
+
+        # enter form data for different device with an already used friendly name
+        result2 = await hass.config_entries.flow.async_configure(
             result["flow_id"],
             {
-                CONF_HOST: "1.1.1.1",
-                CONF_USERNAME: "test-username",
-                CONF_PASSWORD: "test-password",
+                CONF_FRIENDLY_NAME: A_FRIENDLY_NAME,
             },
         )
-        await hass.async_block_till_done()
 
-    assert result["type"] == FlowResultType.CREATE_ENTRY
-    assert result["title"] == "Name of the device"
-    assert result["data"] == {
-        CONF_HOST: "1.1.1.1",
-        CONF_USERNAME: "test-username",
-        CONF_PASSWORD: "test-password",
-    }
-    assert len(mock_setup_entry.mock_calls) == 1
+        assert result2["type"] == FlowResultType.FORM
+        assert result2["errors"] == {"base": "repeated_title"}
