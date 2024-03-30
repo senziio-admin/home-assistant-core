@@ -6,8 +6,9 @@ from typing import Optional
 from homeassistant.components import zeroconf
 from homeassistant.components.senziio import DOMAIN
 from homeassistant.const import CONF_FRIENDLY_NAME, CONF_MODEL, CONF_UNIQUE_ID
+from homeassistant.core import HomeAssistant
 
-from tests.common import MockConfigEntry
+from tests.common import MockConfigEntry, async_fire_mqtt_message
 
 A_DEVICE_ID = "theia-pro-2F3D56AA1234"
 A_DEVICE_MODEL = "Theia Pro"
@@ -63,3 +64,14 @@ class FakeSenziio:
     async def get_info(self) -> dict[str, str]:
         """Get device info."""
         return self._device_info
+
+
+async def when_message_received_is(hass: HomeAssistant, topic: str, payload: str):
+    """Emulate receiving a MQTT message."""
+    async_fire_mqtt_message(hass, topic, payload)
+    await hass.async_block_till_done()
+
+
+def assert_entity_state_is(hass: HomeAssistant, entity: str, state: str):
+    """Check if given entity has the given state."""
+    assert hass.states.get(entity).state == state
