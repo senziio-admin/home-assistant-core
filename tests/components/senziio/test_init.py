@@ -9,29 +9,16 @@ from homeassistant.components.senziio import (
     async_unload_entry,
 )
 from homeassistant.components.senziio.const import MANUFACTURER
-from homeassistant.const import CONF_FRIENDLY_NAME, CONF_MODEL, CONF_UNIQUE_ID
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr
 
-from . import A_DEVICE_ID, A_DEVICE_MODEL, A_FRIENDLY_NAME, DEVICE_INFO, FakeSenziio
-
-from tests.common import MockConfigEntry
-
-ENTRY_DATA = {
-    CONF_UNIQUE_ID: A_DEVICE_ID,
-    CONF_MODEL: A_DEVICE_MODEL,
-    CONF_FRIENDLY_NAME: A_FRIENDLY_NAME,
-    "fw-version": "1.2.3",
-    "hw-version": "1.0.0",
-    "mac-address": "1A:2B:3C:4D:5E:6F",
-    "serial-number": "theia-pro-2F3D56AA1234",
-}
-
-CONFIG_ENTRY = MockConfigEntry(
-    domain=DOMAIN,
-    title=A_FRIENDLY_NAME,
-    unique_id=A_DEVICE_ID,
-    data=ENTRY_DATA,
+from . import (
+    A_DEVICE_ID,
+    A_DEVICE_MODEL,
+    A_FRIENDLY_NAME,
+    CONFIG_ENTRY,
+    DEVICE_INFO,
+    FakeSenziio,
 )
 
 
