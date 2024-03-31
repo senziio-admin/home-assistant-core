@@ -1,4 +1,4 @@
-"""Test binary sensor entities."""
+"""Test Senziio binary sensor entities."""
 
 from unittest.mock import patch
 
