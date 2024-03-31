@@ -1,4 +1,5 @@
 """Config flows for Senziio integration."""
+
 from __future__ import annotations
 
 import logging
@@ -12,8 +13,8 @@ from homeassistant.const import CONF_FRIENDLY_NAME, CONF_MODEL, CONF_UNIQUE_ID
 from homeassistant.core import HomeAssistant
 
 from .const import DOMAIN, MANUFACTURER
+from .device import SenziioDevice
 from .exceptions import CannotConnect, MQTTNotEnabled, RepeatedTitle
-from .senziio_api import Senziio, SenziioHAMQTT
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -168,7 +169,7 @@ async def validate_input(
     # validate device response
     device_id = _sanitize(data_input[CONF_UNIQUE_ID])
     device_model = _sanitize(data_input[CONF_MODEL])
-    device = Senziio(device_id, device_model, mqtt=SenziioHAMQTT(hass))
+    device = SenziioDevice(device_id, device_model, hass)
     device_info = await device.get_info()
 
     if not device_info:

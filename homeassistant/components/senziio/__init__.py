@@ -12,7 +12,7 @@ from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.device_registry import DeviceInfo
 
 from .const import DOMAIN, MANUFACTURER
-from .senziio_api import Senziio, SenziioHAMQTT
+from .device import SenziioDevice
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -29,7 +29,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     device_id = entry.data[CONF_UNIQUE_ID]
     device_model = entry.data[CONF_MODEL]
-    device = Senziio(device_id, device_model, mqtt=SenziioHAMQTT(hass))
+    device = SenziioDevice(device_id, device_model, hass)
 
     registry_info = DeviceInfo(
         identifiers={(DOMAIN, device_id)},

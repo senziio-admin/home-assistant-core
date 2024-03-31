@@ -7,7 +7,7 @@
   "documentation": "https://www.home-assistant.io/integrations/senziio",
   "homekit": {},
   "iot_class": "local_push",
-  "requirements": [],
+  "requirements": ["senziio==0.0.1"],
   "zeroconf": [
     {
       "type": "_http._tcp.local.",

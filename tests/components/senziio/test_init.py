@@ -18,7 +18,7 @@ from . import (
     A_FRIENDLY_NAME,
     CONFIG_ENTRY,
     DEVICE_INFO,
-    FakeSenziio,
+    FakeSenziioDevice,
 )
 
 
@@ -32,8 +32,8 @@ async def test_async_setup_entry(hass: HomeAssistant):
             return_value=True,
         ),
         patch(
-            "homeassistant.components.senziio.senziio_api.Senziio",
-            return_value=FakeSenziio(DEVICE_INFO),
+            "homeassistant.components.senziio.SenziioDevice",
+            return_value=FakeSenziioDevice(DEVICE_INFO),
         ),
         patch.object(
             hass.config_entries, "async_forward_entry_setups", return_value=AsyncMock()
@@ -84,8 +84,8 @@ async def test_async_unload_entry(hass: HomeAssistant):
             return_value=True,
         ),
         patch(
-            "homeassistant.components.senziio.senziio_api.Senziio",
-            return_value=FakeSenziio(DEVICE_INFO),
+            "homeassistant.components.senziio.SenziioDevice",
+            return_value=FakeSenziioDevice(DEVICE_INFO),
         ),
         patch.object(
             hass.config_entries, "async_forward_entry_setups", return_value=AsyncMock()

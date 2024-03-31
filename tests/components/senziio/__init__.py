@@ -54,7 +54,7 @@ ZEROCONF_DISCOVERY_INFO = zeroconf.ZeroconfServiceInfo(
 )
 
 
-class FakeSenziio:
+class FakeSenziioDevice:
     """Fake Senziio device for testing."""
 
     def __init__(self, device_info: Optional[dict] = None) -> None:
